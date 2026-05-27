@@ -12,7 +12,7 @@ func main() {
 	my_entry := passfield.PassFieldSite{}
 	termutils.PopulatePassFieldSite(&my_entry)
 
-	fmt.Println("\nFinal entry:\n", my_entry)
+	fmt.Printf("\nFinal entry:\n%s\n", my_entry)
 
 	// return
 }

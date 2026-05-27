@@ -106,11 +106,12 @@ func readPassword(prompt string, minLength int, requireRetype bool, allowOuterWh
 			termNotify(ptr(fmt.Sprintf("\nPassword is too short, min. length %d. Please try again.", minLength)))
 			continue //retry
 		}
-		if !requireRetype {
-			return response
-		}
 		//
 		termResetLine()
+		if !requireRetype {
+			fmt.Println("Password: (set)")
+			return response
+		}
 		fmt.Print("Confirm by retyping: ")
 		bytesRetyped, _ := term.ReadPassword(int(os.Stdin.Fd()))
 		responseRetyped := string(bytesRetyped)

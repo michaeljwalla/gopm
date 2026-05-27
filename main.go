@@ -121,7 +121,7 @@ func readPassword(prompt string, minLength int, requireRetype bool, allowOuterWh
 
 type PassField interface {
 	Identify() string
-	Populate()
+	// Populate() //unused rn
 }
 
 // considered invalid / will delete if no password
@@ -157,16 +157,13 @@ func (p *PassFieldSite) Populate() {
 	p.PassFieldBasic.Populate()
 	// return
 }
-func generate[T PassField]() *T {
-	var v T
-	v.Populate()
-	return &v
-}
 
 func main() {
 	fmt.Println("Core")
 
-	my_entry := generate[*PassFieldSite]()
+	my_entry := PassFieldSite{}
+	my_entry.Populate()
+
 	fmt.Println("\nFinal entry:\n", my_entry)
 
 	// return

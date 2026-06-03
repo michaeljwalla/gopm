@@ -21,12 +21,12 @@ type PassField interface {
 // considered invalid / will delete if no password
 type PassFieldBasic struct {
 	UUID      string
+	Timestamp int64
 	Username  sql.NullString
 	Email     sql.NullString
 	Phone     sql.NullString
 	Password  sql.NullString
 	Notes     sql.NullString
-	Timestamp int64
 }
 
 func (p PassFieldBasic) Identify() string { return "Basic" }

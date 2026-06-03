@@ -38,12 +38,12 @@ func GetInstance() *sql.DB {
 		PRAGMA user_version = 1;
 		CREATE TABLE IF NOT EXISTS entries (
 			id 			TEXT PRIMARY KEY,
+			timestamp 	INTEGER NOT NULL,
 			username 	TEXT,
 			email 		TEXT,
 			phone 		TEXT,
 			password 	TEXT,
 			notes 		TEXT,
-			timestamp 	INTEGER NOT NULL,
 
 			website 	TEXT
 		);
@@ -64,12 +64,12 @@ func Save(db *sql.DB, field pf.PassField) error {
           INSERT INTO entries (id, username, email, phone, password, notes, timestamp, website)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
+              timestamp = excluded.timestamp,
               username  = COALESCE(excluded.username,  username),
               email     = COALESCE(excluded.email,     email),
               phone     = COALESCE(excluded.phone,     phone),
               password  = COALESCE(excluded.password,  password),
               notes     = COALESCE(excluded.notes,     notes),
-              timestamp = excluded.timestamp,
               website   = COALESCE(excluded.website,   website)
       `,
 			p.UUID,
@@ -83,16 +83,15 @@ func Save(db *sql.DB, field pf.PassField) error {
           INSERT INTO entries (id, username, email, phone, password, notes, timestamp, website)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
+              timestamp = excluded.timestamp
               username  = COALESCE(excluded.username,  username),
               email     = COALESCE(excluded.email,     email),
               phone     = COALESCE(excluded.phone,     phone),
               password  = COALESCE(excluded.password,  password),
               notes     = COALESCE(excluded.notes,     notes),
-              timestamp = excluded.timestamp
       `,
-			p.UUID,
+			p.UUID, p.Timestamp,
 			p.Username, p.Email, p.Phone, p.Password, p.Notes,
-			p.Timestamp,
 		)
 		return err
 	}

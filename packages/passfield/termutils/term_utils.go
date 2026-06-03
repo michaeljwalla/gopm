@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/term"
 )
 
@@ -128,12 +129,13 @@ func readPassword(prompt string, minLength int, requireRetype bool, allowOuterWh
 
 func PopulatePassFieldBasic(p *passfield.PassFieldBasic) {
 	no_str := ptr("")
+	p.UUID = uuid.NewString()
 	p.Username = stringToSQLNullString(readField("Username? ", nil, true, no_str))
 	p.Email = stringToSQLNullString(readField("Email? ", nil, true, no_str))
 	p.Phone = stringToSQLNullString(readField("Phone #? ", nil, true, no_str))
 	p.Password = stringToSQLNullString(readPassword("Password", 6, true, false)) //readPassword
 	p.Notes = stringToSQLNullString(readField("Notes? ", nil, true, no_str))
-	p.Timestamp = uint(time.Now().Unix())
+	p.Timestamp = time.Now().Unix()
 	// return
 }
 

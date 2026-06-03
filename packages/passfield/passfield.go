@@ -20,12 +20,13 @@ type PassField interface {
 // passfieldbasic
 // considered invalid / will delete if no password
 type PassFieldBasic struct {
+	UUID      string
 	Username  sql.NullString
 	Email     sql.NullString
 	Phone     sql.NullString
 	Password  sql.NullString
 	Notes     sql.NullString
-	Timestamp uint
+	Timestamp int64
 }
 
 func (p PassFieldBasic) Identify() string { return "Basic" }
@@ -48,13 +49,14 @@ func formatNullStr(n sql.NullString) string {
 
 func (p PassFieldBasic) String() string {
 	return fmt.Sprintf(
-		"%-12s %s\n%-12s %s\n%-12s %s\n%-12s %s\n%-12s %s\n%-12s %d",
+		"%-12s %s\n%-12s %s\n%-12s %s\n%-12s %s\n%-12s %s\n%-12s %d\n%-12s %s",
 		"Username:", formatNullStr(p.Username),
 		"Email:", formatNullStr(p.Email),
 		"Phone:", formatNullStr(p.Phone),
 		"Password:", "< OMITTED >",
 		"Notes:", formatNullStr(p.Notes),
 		"Timestamp:", p.Timestamp,
+		"UUID:", p.UUID,
 	)
 }
 

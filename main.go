@@ -11,15 +11,15 @@ import (
 func main() {
 	fmt.Println("Core")
 
-	db := storage.GetInstance()
-	defer db.Close()
+	storage.StartInstance()
+	defer storage.Close()
 
-	my_entry := passfield.PassFieldSite{}
-	termutils.PopulatePassFieldSite(&my_entry)
+	my_entry := passfield.PassFieldBasic{}
+	termutils.PopulatePassFieldBasic(&my_entry)
 
 	fmt.Printf("\nFinal entry:\n%s\n", my_entry)
 
-	err := storage.Save(db, &my_entry)
+	err := storage.Save(&my_entry)
 	if err != nil {
 		log.Fatal(err)
 	}

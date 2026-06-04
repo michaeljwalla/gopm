@@ -130,17 +130,15 @@ func readPassword(prompt string, minLength int, requireRetype bool, allowOuterWh
 func PopulatePassFieldBasic(p *passfield.PassFieldBasic) {
 	no_str := ptr("")
 	p.UUID = uuid.NewString()
+	//
+	p.Website = stringToSQLNullString(readField("Website", ptr("You must provide a website.\n"), false, nil))
+
 	p.Username = stringToSQLNullString(readField("Username? ", nil, true, no_str))
 	p.Email = stringToSQLNullString(readField("Email? ", nil, true, no_str))
 	p.Phone = stringToSQLNullString(readField("Phone #? ", nil, true, no_str))
 	p.Password = stringToSQLNullString(readPassword("Password", 6, true, false)) //readPassword
 	p.Notes = stringToSQLNullString(readField("Notes? ", nil, true, no_str))
 	p.Timestamp = time.Now().Unix()
-	// return
-}
 
-func PopulatePassFieldSite(p *passfield.PassFieldSite) {
-	p.Website = stringToSQLNullString(readField("Website", ptr("You must provide a website.\n"), false, nil))
-	PopulatePassFieldBasic(&p.PassFieldBasic)
 	// return
 }

@@ -2,7 +2,6 @@ package storage
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 	pf "main/packages/passfield"
 	"os"
@@ -12,7 +11,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-var instance *sql.DB
+var db *sql.DB
 var once sync.Once
 
 /*
@@ -20,16 +19,18 @@ singleton
 
 main should open & close, pass pointers
 */
-func GetInstance() *sql.DB {
+func StartInstance() {
 	once.Do(func() {
+		var err error
 		path, err := os.Executable()
 		if err != nil {
 			log.Fatal(err)
 		}
 		path = filepath.Join(filepath.Dir(path), "storage.db")
 
-		db, err := sql.Open("sqlite", path)
+		db, err = sql.Open("sqlite", path)
 		if err != nil {
+			once = sync.Once{}
 			log.Fatal(err)
 		}
 
@@ -52,49 +53,43 @@ func GetInstance() *sql.DB {
 		}
 
 		db.SetMaxOpenConns(1)
-		instance = db
 	})
-	return instance
 }
 
-func Save(db *sql.DB, field pf.PassField) error {
-	switch p := field.(type) {
-	case *pf.PassFieldSite:
-		_, err := db.Exec(`
-          INSERT INTO entries (id, username, email, phone, password, notes, timestamp, website)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(id) DO UPDATE SET
-              timestamp = excluded.timestamp,
-              username  = COALESCE(excluded.username,  username),
-              email     = COALESCE(excluded.email,     email),
-              phone     = COALESCE(excluded.phone,     phone),
-              password  = COALESCE(excluded.password,  password),
-              notes     = COALESCE(excluded.notes,     notes),
-              website   = COALESCE(excluded.website,   website)
-      `,
-			p.UUID,
-			p.Username, p.Email, p.Phone, p.Password, p.Notes,
-			p.Timestamp,
-			p.Website,
-		)
-		return err
-	case *pf.PassFieldBasic:
-		_, err := db.Exec(`
-          INSERT INTO entries (id, username, email, phone, password, notes, timestamp, website)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(id) DO UPDATE SET
-              timestamp = excluded.timestamp
-              username  = COALESCE(excluded.username,  username),
-              email     = COALESCE(excluded.email,     email),
-              phone     = COALESCE(excluded.phone,     phone),
-              password  = COALESCE(excluded.password,  password),
-              notes     = COALESCE(excluded.notes,     notes),
-      `,
-			p.UUID, p.Timestamp,
-			p.Username, p.Email, p.Phone, p.Password, p.Notes,
-		)
-		return err
+func Save(field *pf.PassFieldBasic) error {
+	_, err := db.Exec(`
+		INSERT INTO entries (id, username, email, phone, password, notes, timestamp, website)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			timestamp = excluded.timestamp,
+			username  = COALESCE(excluded.username,  username),
+			email     = COALESCE(excluded.email,     email),
+			phone     = COALESCE(excluded.phone,     phone),
+			password  = COALESCE(excluded.password,  password),
+			notes     = COALESCE(excluded.notes,     notes),
+			website   = COALESCE(excluded.website,   website)
+	`,
+		field.UUID,
+		field.Username, field.Email, field.Phone, field.Password, field.Notes,
+		field.Timestamp,
+		field.Website,
+	)
+
+	return err
+}
+
+func Close() error {
+	return db.Close()
+}
+func GetEntries() ([]pf.PassField, error) {
+	var passfields []pf.PassField
+	data, err := db.Query(`SELECT * FROM entries`)
+	if err != nil {
+		return passfields, err
 	}
 
-	return fmt.Errorf("unknown PassField: %s", field.Identify())
+	for data.Next() {
+
+	}
+	return passfields, nil
 }

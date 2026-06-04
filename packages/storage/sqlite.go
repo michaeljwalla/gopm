@@ -102,16 +102,35 @@ func Close() error {
 	owned = false
 	return err
 }
-func GetEntries() ([]pf.PassField, error) {
+
+func createPassFieldbasic(q *sql.Rows) pf.PassFieldBasic {
+	var uuid string
+	var timestamp int64
+	var username, email, phone, password, notes, website sql.NullString
+
+	q.Scan(&uuid, &timestamp, &username, &email, &phone, &password, &notes, &website)
+	return pf.PassFieldBasic{
+		UUID:      uuid,
+		Timestamp: timestamp,
+		Username:  username,
+		Email:     email,
+		Phone:     phone,
+		Password:  password,
+		Notes:     notes,
+		Website:   website,
+	}
+}
+func GetEntries() ([]pf.PassFieldBasic, error) {
 	assertInitAndOwned()
-	var passfields []pf.PassField
+	var passfields []pf.PassFieldBasic
 	data, err := db.Query(`SELECT * FROM entries`)
 	if err != nil {
 		return passfields, err
 	}
 
 	for data.Next() {
-
+		passfields = append(passfields, createPassFieldbasic(data))
 	}
-	return passfields, nil
+
+	return passfields, data.Err()
 }

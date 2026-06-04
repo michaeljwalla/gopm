@@ -131,7 +131,7 @@ func PopulatePassFieldBasic(p *passfield.PassFieldBasic) {
 	no_str := ptr("")
 	p.UUID = uuid.NewString()
 	//
-	p.Website = stringToSQLNullString(readField("Website", ptr("You must provide a website.\n"), false, nil))
+	p.Website = stringToSQLNullString(readField("Website?", nil, true, no_str))
 
 	p.Username = stringToSQLNullString(readField("Username? ", nil, true, no_str))
 	p.Email = stringToSQLNullString(readField("Email? ", nil, true, no_str))

@@ -6,35 +6,32 @@ import (
 	pf "main/packages/passfield"
 	"os"
 	"path/filepath"
-	"sync"
 
 	_ "modernc.org/sqlite"
 )
 
 var db *sql.DB
-var once sync.Once
+var owned bool = false
 
 /*
 singleton
 
 main should open & close, pass pointers
 */
-func StartInstance() {
-	once.Do(func() {
-		var err error
-		path, err := os.Executable()
-		if err != nil {
-			log.Fatal(err)
-		}
-		path = filepath.Join(filepath.Dir(path), "storage.db")
+func doInit() {
+	var err error
+	path, err := os.Executable()
+	if err != nil {
+		log.Fatal(err)
+	}
+	path = filepath.Join(filepath.Dir(path), "storage.db")
 
-		db, err = sql.Open("sqlite", path)
-		if err != nil {
-			once = sync.Once{}
-			log.Fatal(err)
-		}
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-		if _, err := db.Exec(`
+	if _, err := db.Exec(`
 		PRAGMA foreign_keys = ON;
 		PRAGMA user_version = 1;
 		CREATE TABLE IF NOT EXISTS entries (
@@ -49,14 +46,35 @@ func StartInstance() {
 			website 	TEXT
 		);
 		`); err != nil {
-			log.Fatal(err)
-		}
+		log.Fatal(err)
+	}
 
-		db.SetMaxOpenConns(1)
-	})
+	db.SetMaxOpenConns(1)
 }
 
+/*
+immediately assumes TryInit() == true means the caller will own & closew
+
+if s.TryInit() { defer s.Close() }
+*/
+func TryInit() bool {
+	if owned {
+		return false
+	}
+	owned = true
+	doInit()
+	return true
+}
+func assertInitAndOwned() {
+	if db == nil {
+		panic("DB not initialized")
+	}
+	if !owned {
+		panic("DB has no explicit owner")
+	}
+}
 func Save(field *pf.PassFieldBasic) error {
+	assertInitAndOwned()
 	_, err := db.Exec(`
 		INSERT INTO entries (id, username, email, phone, password, notes, timestamp, website)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -79,9 +97,13 @@ func Save(field *pf.PassFieldBasic) error {
 }
 
 func Close() error {
-	return db.Close()
+	err := db.Close()
+	db = nil
+	owned = false
+	return err
 }
 func GetEntries() ([]pf.PassField, error) {
+	assertInitAndOwned()
 	var passfields []pf.PassField
 	data, err := db.Query(`SELECT * FROM entries`)
 	if err != nil {

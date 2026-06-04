@@ -10,9 +10,9 @@ import (
 
 func main() {
 	fmt.Println("Core")
-
-	storage.StartInstance()
-	defer storage.Close()
+	if storage.TryInit() {
+		defer storage.Close()
+	}
 
 	my_entry := passfield.PassFieldBasic{}
 	termutils.PopulatePassFieldBasic(&my_entry)

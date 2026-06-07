@@ -4,6 +4,8 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"database/sql"
+	"errors"
 	"io"
 
 	"golang.org/x/crypto/argon2"
@@ -61,4 +63,36 @@ func Open(key []byte, blob []byte) ([]byte, error) {
 	nonce, ct := blob[:gcm.NonceSize()], blob[gcm.NonceSize():]
 
 	return gcm.Open(nil, nonce, ct, nil)
+}
+
+func SealField(dek []byte, field sql.NullString) ([]byte, error) {
+	var plaintext []byte
+	if field.Valid {
+		plaintext = append([]byte{0x01}, []byte(field.String)...)
+	} else {
+		var sizeBuf [1]byte
+		if _, err := io.ReadFull(rand.Reader, sizeBuf[:]); err != nil {
+			return nil, err
+		}
+		paddingLen := 31 + int(sizeBuf[0])%33
+		padding := make([]byte, paddingLen)
+		if _, err := io.ReadFull(rand.Reader, padding); err != nil {
+			return nil, err
+		}
+		plaintext = append([]byte{0x00}, padding...)
+	}
+	return Seal(dek, plaintext)
+}
+func OpenField(dek []byte, blob []byte) (sql.NullString, error) {
+	plaintext, err := Open(dek, blob)
+	if err != nil {
+		return sql.NullString{}, err
+	}
+	if len(plaintext) == 0 || plaintext[0] > 0x01 {
+		return sql.NullString{}, errors.New("malformed or missing field")
+	}
+	if plaintext[0] == 0x01 {
+		return sql.NullString{String: string(plaintext[1:]), Valid: true}, nil
+	}
+	return sql.NullString{}, nil
 }

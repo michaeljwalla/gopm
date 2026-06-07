@@ -3,9 +3,11 @@ package storage
 import (
 	"database/sql"
 	"log"
+	"main/packages/encrypt"
 	pf "main/packages/passfield"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	_ "modernc.org/sqlite"
 )
@@ -36,14 +38,19 @@ func doInit() {
 		PRAGMA user_version = 1;
 		CREATE TABLE IF NOT EXISTS entries (
 			id 			TEXT PRIMARY KEY,
-			timestamp 	INTEGER NOT NULL,
-			username 	TEXT,
-			email 		TEXT,
-			phone 		TEXT,
-			password 	TEXT,
-			notes 		TEXT,
+			timestamp 	BLOB NOT NULL,
+			username 	BLOB NOT NULL,
+			email 		BLOB NOT NULL,
+			phone 		BLOB NOT NULL,
+			password 	BLOB NOT NULL,
+			notes 		BLOB NOT NULL,
 
-			website 	TEXT
+			website 	BLOB NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS vault (
+			id		INTEGER PRIMARY KEY,
+			salt	BLOB NOT NULL,
+			wdek	BLOB NOT NULL
 		);
 		`); err != nil {
 		log.Fatal(err)
@@ -73,54 +80,121 @@ func assertInitAndOwned() {
 		panic("DB has no explicit owner")
 	}
 }
-func Save(field *pf.PassFieldBasic) error {
+func throwPassWrapString(key []byte, data sql.NullString) []byte {
+	field, err := encrypt.SealField(key, data)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return field
+}
+func Save(key []byte, field *pf.PassFieldBasic) error {
 	assertInitAndOwned()
+	timestamp := throwPassWrapString(key, sql.NullString{
+		Valid:  true,
+		String: strconv.FormatInt(field.Timestamp, 10),
+	})
 	_, err := db.Exec(`
-		INSERT INTO entries (id, username, email, phone, password, notes, timestamp, website)
+		INSERT INTO entries (id, timestamp, username, email, phone, password, notes, website)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			timestamp = excluded.timestamp,
-			username  = COALESCE(excluded.username,  username),
-			email     = COALESCE(excluded.email,     email),
-			phone     = COALESCE(excluded.phone,     phone),
-			password  = COALESCE(excluded.password,  password),
-			notes     = COALESCE(excluded.notes,     notes),
-			website   = COALESCE(excluded.website,   website)
+			username  = excluded.username,
+			email     = excluded.email,
+			phone     = excluded.phone,
+			password  = excluded.password,
+			notes     = excluded.notes,
+			website   = excluded.website
 	`,
-		field.UUID,
-		field.Username, field.Email, field.Phone, field.Password, field.Notes,
-		field.Timestamp,
-		field.Website,
+		field.UUID, timestamp,
+		throwPassWrapString(key, field.Username),
+		throwPassWrapString(key, field.Email),
+		throwPassWrapString(key, field.Phone),
+		throwPassWrapString(key, field.Password),
+		throwPassWrapString(key, field.Notes),
+
+		throwPassWrapString(key, field.Website),
 	)
 
 	return err
 }
 
 func Close() error {
+	if db == nil {
+		return nil
+	}
 	err := db.Close()
 	db = nil
 	owned = false
 	return err
 }
 
-func createPassFieldbasic(q *sql.Rows) pf.PassFieldBasic {
-	var uuid string
-	var timestamp int64
-	var username, email, phone, password, notes, website sql.NullString
+type VaultBlobs struct {
+	Wdek []byte
+	Salt []byte
+}
 
-	q.Scan(&uuid, &timestamp, &username, &email, &phone, &password, &notes, &website)
-	return pf.PassFieldBasic{
-		UUID:      uuid,
-		Timestamp: timestamp,
-		Username:  username,
-		Email:     email,
-		Phone:     phone,
-		Password:  password,
-		Notes:     notes,
-		Website:   website,
+// dek still wrapped
+func GetVault() VaultBlobs {
+	assertInitAndOwned()
+	data := db.QueryRow("SELECT wdek, salt FROM vault LIMIT 1")
+	var wdek, salt []byte
+	if err := data.Scan(&wdek, &salt); err != nil {
+		log.Fatal(err)
+	}
+
+	return VaultBlobs{Wdek: wdek, Salt: salt}
+}
+
+// wrap dek beforehand
+func SetVault(in VaultBlobs) {
+	assertInitAndOwned()
+	_, err := db.Exec(`INSERT INTO vault (id, wdek, salt)
+		VALUES (1, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			wdek = excluded.wdek,
+			salt = excluded.salt
+		`,
+		in.Wdek,
+		in.Salt,
+	)
+	if err != nil {
+		log.Fatal(err)
 	}
 }
-func GetEntries() ([]pf.PassFieldBasic, error) {
+
+func throwPassUnwrapString(key []byte, data []byte) sql.NullString {
+	field, err := encrypt.OpenField(key, data)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return field
+}
+func throwPassInt64Eval(num string) int64 {
+	field, err := strconv.ParseInt(num, 10, 64)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return field
+}
+func createPassFieldbasic(key []byte, q *sql.Rows) pf.PassFieldBasic {
+	var uuid string
+	var timestamp, username, email, phone, password, notes, website []byte
+
+	if err := q.Scan(&uuid, &timestamp, &username, &email, &phone, &password, &notes, &website); err != nil {
+		log.Fatal(err)
+	}
+	return pf.PassFieldBasic{
+		UUID:      uuid,
+		Timestamp: throwPassInt64Eval(throwPassUnwrapString(key, timestamp).String),
+		Username:  throwPassUnwrapString(key, username),
+		Email:     throwPassUnwrapString(key, email),
+		Phone:     throwPassUnwrapString(key, phone),
+		Password:  throwPassUnwrapString(key, password),
+		Notes:     throwPassUnwrapString(key, notes),
+		Website:   throwPassUnwrapString(key, website),
+	}
+}
+func GetEntries(key []byte) ([]pf.PassFieldBasic, error) {
 	assertInitAndOwned()
 	var passfields []pf.PassFieldBasic
 	data, err := db.Query(`SELECT * FROM entries`)
@@ -129,7 +203,7 @@ func GetEntries() ([]pf.PassFieldBasic, error) {
 	}
 
 	for data.Next() {
-		passfields = append(passfields, createPassFieldbasic(data))
+		passfields = append(passfields, createPassFieldbasic(key, data))
 	}
 
 	return passfields, data.Err()

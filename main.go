@@ -5,31 +5,33 @@ import (
 	"log"
 	"main/packages/passfield"
 	"main/packages/passfield/termutils"
+	term "main/packages/passfield/termutils"
 	"main/packages/storage"
 )
 
-func genEntry() {
+func genEntry(dek []byte) {
 	if storage.TryInit() {
 		defer storage.Close()
 	}
 	my_entry := passfield.PassFieldBasic{}
 	termutils.PopulatePassFieldBasic(&my_entry)
 
-	err := storage.Save(&my_entry)
+	err := storage.Save(dek, &my_entry)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
-func printEntries() {
+
+func printEntries(dek []byte) {
 	if storage.TryInit() {
 		defer storage.Close()
 	}
-	entries, err := storage.GetEntries()
+	entries, err := storage.GetEntries(dek)
 	if err != nil {
 		log.Fatal(err)
 	}
 	for _, v := range entries {
-		fmt.Println(v.UUID, v.Website, v.Password)
+		fmt.Println(v)
 	}
 }
 func main() {
@@ -38,7 +40,10 @@ func main() {
 		defer storage.Close()
 	}
 	//
-	genEntry()
-	printEntries()
+	vault := storage.GetVault()
+	dek := term.RequestDEK(vault)
+
+	genEntry(dek)
+	printEntries(dek)
 	// return
 }

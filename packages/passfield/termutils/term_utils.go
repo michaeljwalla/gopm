@@ -3,9 +3,15 @@ package termutils
 import (
 	"bufio"
 	"database/sql"
+	"errors"
 	"fmt"
+	"log"
+	"main/packages/encrypt"
 	"main/packages/passfield"
+	"main/packages/storage"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -141,4 +147,91 @@ func PopulatePassFieldBasic(p *passfield.PassFieldBasic) {
 	p.Timestamp = time.Now().Unix()
 
 	// return
+}
+
+func storeOldVault(path string) (string, error) {
+	otherspath := filepath.Join(path, "others")
+	if err := os.MkdirAll(otherspath, 0700); err != nil {
+		return "", err
+	}
+	ts := strconv.FormatInt(time.Now().Unix(), 10)
+
+	file := filepath.Join(path, "storage.db")
+	newfile := filepath.Join(otherspath, ts+".db")
+	if err := os.Rename(file, newfile); err != nil {
+		if errors.Is(err, os.ErrNotExist) { // nothing to save
+			return "", nil
+		}
+		return "", err
+	}
+
+	return newfile, nil
+}
+
+func RequestDEK(vault storage.VaultBlobs) []byte {
+	password := readPassword("Enter master password", 6, false, false)
+	kek := encrypt.DeriveKEK(password, vault.Salt)
+
+	dek, err := encrypt.Open(kek, vault.Wdek)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return dek
+}
+
+// need reownership TryInit() after
+func UpdateVault() []byte {
+	fmt.Print(`
+ - Your password will not be saved, only used to generate a key.
+ - You should remember it.
+`)
+	password := readPassword("Enter a master password", 6, true, false)
+	fmt.Println()
+
+	salt, err := encrypt.GenSalt()
+	if err != nil {
+		log.Fatal(err)
+	}
+	kek := encrypt.DeriveKEK(password, salt)
+	dek, err := encrypt.GenKey()
+	if err != nil {
+		log.Fatal(err)
+	}
+	wdek, err := encrypt.Seal(kek, dek)
+	if err != nil {
+		log.Fatal(err)
+	}
+	//
+	storage.SetVault(storage.VaultBlobs{Wdek: wdek, Salt: salt})
+
+	return dek
+}
+
+func NewVault() []byte {
+	no_str := ptr("")
+	resp := strings.TrimSpace(readField("\nCreate a new vault? [y/N]", nil, true, no_str))
+	if resp != "y" && resp != "Y" {
+		fmt.Print("Canceled.\n\n")
+		return nil
+	}
+	// save old
+	var err error
+	path, err := os.Executable()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	savedTo, err := storeOldVault(filepath.Dir(path))
+
+	storage.Close()
+	storage.TryInit()
+	defer storage.Close()
+
+	if err != nil {
+		log.Fatal(err)
+	} else if savedTo != "" {
+		fmt.Println("Saved old vault to", savedTo)
+	}
+
+	return UpdateVault()
 }

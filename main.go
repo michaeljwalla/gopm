@@ -40,6 +40,7 @@ func main() {
 		defer storage.Close()
 	}
 	//
+	// term.UpdateVault()
 	vault := storage.GetVault()
 	dek := term.RequestDEK(vault)
 

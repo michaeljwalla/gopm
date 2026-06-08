@@ -50,7 +50,8 @@ func doInit() {
 		CREATE TABLE IF NOT EXISTS vault (
 			id		INTEGER PRIMARY KEY,
 			salt	BLOB NOT NULL,
-			wdek	BLOB NOT NULL
+			wdek	BLOB NOT NULL,
+			hint	STRING
 		);
 		`); err != nil {
 		log.Fatal(err)
@@ -131,31 +132,35 @@ func Close() error {
 type VaultBlobs struct {
 	Wdek []byte
 	Salt []byte
+	Hint sql.NullString
 }
 
 // dek still wrapped
 func GetVault() VaultBlobs {
 	assertInitAndOwned()
-	data := db.QueryRow("SELECT wdek, salt FROM vault LIMIT 1")
+	data := db.QueryRow("SELECT wdek, salt, hint FROM vault LIMIT 1")
 	var wdek, salt []byte
-	if err := data.Scan(&wdek, &salt); err != nil {
+	var hint sql.NullString
+	if err := data.Scan(&wdek, &salt, &hint); err != nil {
 		log.Fatal(err)
 	}
 
-	return VaultBlobs{Wdek: wdek, Salt: salt}
+	return VaultBlobs{Wdek: wdek, Salt: salt, Hint: hint}
 }
 
 // wrap dek beforehand
 func SetVault(in VaultBlobs) {
 	assertInitAndOwned()
-	_, err := db.Exec(`INSERT INTO vault (id, wdek, salt)
-		VALUES (1, ?, ?)
+	_, err := db.Exec(`INSERT INTO vault (id, wdek, salt, hint)
+		VALUES (1, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			wdek = excluded.wdek,
-			salt = excluded.salt
+			salt = excluded.salt,
+			hint = excluded.hint
 		`,
 		in.Wdek,
 		in.Salt,
+		in.Hint,
 	)
 	if err != nil {
 		log.Fatal(err)

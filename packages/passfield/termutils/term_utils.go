@@ -169,6 +169,13 @@ func storeOldVault(path string) (string, error) {
 }
 
 func RequestDEK(vault storage.VaultBlobs) []byte {
+	fmt.Print("Hint: ")
+	if vault.Hint.Valid {
+		fmt.Println("\"" + vault.Hint.String + "\"")
+	} else {
+		fmt.Println("n/a")
+	}
+	//
 	password := readPassword("Enter master password", 6, false, false)
 	kek := encrypt.DeriveKEK(password, vault.Salt)
 
@@ -181,11 +188,13 @@ func RequestDEK(vault storage.VaultBlobs) []byte {
 
 // need reownership TryInit() after
 func UpdateVault() []byte {
+	no_str := ptr("")
 	fmt.Print(`
  - Your password will not be saved, only used to generate a key.
  - You should remember it.
 `)
 	password := readPassword("Enter a master password", 6, true, false)
+	hint := stringToSQLNullString(readField("Enter a hint", nil, true, no_str))
 	fmt.Println()
 
 	salt, err := encrypt.GenSalt()
@@ -202,7 +211,7 @@ func UpdateVault() []byte {
 		log.Fatal(err)
 	}
 	//
-	storage.SetVault(storage.VaultBlobs{Wdek: wdek, Salt: salt})
+	storage.SetVault(storage.VaultBlobs{Wdek: wdek, Salt: salt, Hint: hint})
 
 	return dek
 }
